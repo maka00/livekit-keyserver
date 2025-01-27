@@ -1,0 +1,4 @@
+### GET request to example server
+PUT http://localhost:3030/token?identity=alice&room=room1
+
+###
