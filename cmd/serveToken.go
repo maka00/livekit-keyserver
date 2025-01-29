@@ -4,16 +4,21 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"livekit-keysrv/internal/livekit"
 	"log"
 	"net/http"
-	"time"
 
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+type TokenStruct struct {
+	Token string `json:"token"`
+}
 
 // serveTokenCmd represents the serveToken command.
 var serveTokenCmd = &cobra.Command{
@@ -22,14 +27,12 @@ var serveTokenCmd = &cobra.Command{
 	Long:  `Serves a 24h livekit access token via http.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("serveToken called")
-		srv := http.Server{
-			Addr:              ":3030",
-			ReadHeaderTimeout: time.Second,
-		}
+
 		apiKey := viper.GetString("API_KEY")
 		if apiKey == "" {
 			log.Fatalf("API_KEY not set")
 		}
+
 		apiSecret := viper.GetString("API_SECRET")
 		if apiSecret == "" {
 			log.Fatalf("API_SECRET not set")
@@ -37,13 +40,21 @@ var serveTokenCmd = &cobra.Command{
 
 		tkngen := livekit.NewDefaultTokenGenerator(apiKey, apiSecret)
 
-		// HTTP PUT /token?identity=alice&room=room1
-		http.Handle("/token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPut {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
+		route := mux.NewRouter()
+
+		cors := cors.New(cors.Options{
+			AllowedOrigins: []string{"*"},
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"*"},
+		})
+
+		route.Handle("/token", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			//if r.Method != http.MethodGet {
+			//	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			//	w.WriteHeader(http.StatusMethodNotAllowed)
+			//	return
+			//}
 			identity := r.URL.Query().Get("identity")
 			if identity == "" {
 				http.Error(w, "identity not set", http.StatusBadRequest)
@@ -62,14 +73,23 @@ var serveTokenCmd = &cobra.Command{
 				return
 			}
 
-			_, err = io.WriteString(w, token)
+			tokenObject := TokenStruct{Token: token}
+
+			jsonToken, err := json.Marshal(tokenObject)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-		}))
-		if err := srv.ListenAndServe(); err != nil {
+			w.Write(jsonToken)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+		})).Methods(http.MethodGet)
+
+		if err := http.ListenAndServe(":3030", cors.Handler(route)); err != nil {
 			log.Fatalf("error starting http server: %v\n", err.Error())
 		}
 		fmt.Println("server shutdown")

@@ -30,8 +30,9 @@ func NewDefaultTokenGenerator(apiKey string, apiSecret string) *DefaultTokenGene
 func (g *DefaultTokenGenerator) GenerateToken(identity string, roomName string) (string, error) {
 	at := auth.NewAccessToken(g.apiKey, g.apiSecret)
 	grant := &auth.VideoGrant{
-		RoomJoin: true,
-		Room:     roomName,
+		RoomJoin:   true,
+		RoomCreate: true,
+		Room:       roomName,
 	}
 	grant.SetCanPublishData(true)
 	grant.SetCanPublish(true)
